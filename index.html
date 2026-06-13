@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MSA Align — Amino Acid Multiple Sequence Alignment</title>
+<meta name="description" content="In-browser multiple sequence alignment for amino acid sequences. Works offline on any device. Progressive alignment with BLOSUM62." />
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2027;
+    --panel-2: #222b35;
+    --border: #2d3742;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #4f9cf9;
+    --accent-2: #2d7d46;
+    --danger: #f0506e;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f8fa; --panel: #ffffff; --panel-2: #f0f3f6; --border: #d8dee4;
+      --text: #1f2328; --muted: #636c76; --accent: #0969da; --accent-2: #1a7f37;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    line-height: 1.5; font-size: 15px; -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  header.app { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  header.app h1 { font-size: 22px; margin: 0; }
+  header.app .tag { color: var(--muted); font-size: 13px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  label.fld { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  textarea {
+    width: 100%; min-height: 180px; resize: vertical; background: var(--panel-2);
+    color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.4;
+  }
+  textarea:focus, select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-top: 12px; }
+  .ctl { display: flex; flex-direction: column; gap: 4px; }
+  .ctl small { color: var(--muted); font-size: 11px; }
+  select, input[type="number"] {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 9px; font-size: 13px; font-family: var(--sans);
+  }
+  input[type="number"] { width: 90px; }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--sans);
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+  button.ghost:hover { background: var(--panel-2); filter: none; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .hidden { display: none !important; }
+  .msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+  .msg.err { background: rgba(240,80,110,0.12); color: var(--danger); border: 1px solid rgba(240,80,110,0.4); }
+  .msg.warn { background: rgba(210,160,40,0.12); color: #d2a028; border: 1px solid rgba(210,160,40,0.4); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .v { font-size: 20px; font-weight: 700; }
+  .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  h2.sec { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .aln-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+  .aln { font-family: var(--mono); font-size: 13px; white-space: nowrap; padding: 10px; min-width: max-content; }
+  .aln .alnrow { display: flex; align-items: center; }
+  .aln .lbl { display: inline-block; width: 150px; min-width: 150px; padding-right: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .aln .seq { letter-spacing: 0; }
+  .aln .res { display: inline-block; width: 11px; text-align: center; }
+  .aln .ruler { color: var(--muted); }
+  .aln .consrow .lbl, .aln .symrow .lbl { font-weight: 600; color: var(--text); }
+  .aln .sym { display: inline-block; width: 11px; text-align: center; color: var(--accent); font-weight: 700; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .legend span b { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  table.idmat { border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+  table.idmat th, table.idmat td { border: 1px solid var(--border); padding: 4px 7px; text-align: center; }
+  table.idmat th { color: var(--muted); font-weight: 600; position: sticky; }
+  .mat-scroll { overflow: auto; max-height: 420px; border: 1px solid var(--border); border-radius: 8px; }
+  details summary { cursor: pointer; font-size: 14px; font-weight: 600; padding: 4px 0; }
+  footer.app { color: var(--muted); font-size: 12px; text-align: center; padding: 10px 0 30px; }
+  footer.app a { color: var(--accent); }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: sp 0.7s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (max-width: 600px) {
+    .aln .lbl { width: 92px; min-width: 92px; }
+    header.app h1 { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <h1>🧬 MSA Align</h1>
+    <span class="tag">Amino-acid multiple sequence alignment · runs entirely in your browser</span>
+  </header>
+  <p class="sub">Paste or upload FASTA protein sequences and align them. Progressive alignment (Needleman–Wunsch + BLOSUM62, UPGMA guide tree). No server, no install — works offline on any device.</p>
+
+  <div class="panel">
+    <label class="fld" for="fasta">FASTA input (amino acid sequences)</label>
+    <textarea id="fasta" spellcheck="false" placeholder=">seq1&#10;MVLSEGEWQLVLHVWAKVEAD...&#10;>seq2&#10;MVLSEGEWQLVLHVWAKVEAD..."></textarea>
+    <div class="row" style="margin-top:10px;">
+      <div class="btn-group">
+        <button id="alignBtn">Align sequences</button>
+        <button class="ghost" id="exampleBtn">Load example</button>
+        <button class="ghost" id="clearBtn">Clear</button>
+        <label class="ghost" style="background:transparent;color:var(--accent);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer;">
+          Upload .fasta<input type="file" id="fileInput" accept=".fasta,.fa,.faa,.txt,.fas" class="hidden" />
+        </label>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label class="fld" style="margin:0;">Conservation</label>
+        <select id="consMethod">
+          <option value="identity">Identity (% most common)</option>
+          <option value="entropy">Shannon entropy</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label class="fld" style="margin:0;">Coloring</label>
+        <select id="colorScheme">
+          <option value="clustal">Clustal (by property)</option>
+          <option value="conservation">By conservation</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label class="fld" style="margin:0;">Gap open</label>
+        <input type="number" id="gapOpen" value="-10" step="1" />
+      </div>
+      <div class="ctl">
+        <label class="fld" style="margin:0;">Gap extend</label>
+        <input type="number" id="gapExtend" value="-1" step="1" />
+      </div>
+    </div>
+    <div id="message"></div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="panel">
+      <h2 class="sec">Summary</h2>
+      <div class="stats" id="statsGrid"></div>
+    </div>
+
+    <div class="panel">
+      <h2 class="sec">Alignment</h2>
+      <div class="aln-scroll"><div class="aln" id="alnView"></div></div>
+      <div class="legend" id="legend"></div>
+      <div class="btn-group" style="margin-top:14px;">
+        <button class="ghost" data-fmt="fasta">Download FASTA</button>
+        <button class="ghost" data-fmt="clustal">Download ClustalW</button>
+        <button class="ghost" data-fmt="phylip">Download PHYLIP</button>
+        <button class="ghost" data-fmt="json">Download JSON analysis</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <details>
+        <summary>Pairwise identity matrix</summary>
+        <div class="mat-scroll" id="matWrap" style="margin-top:12px;"></div>
+      </details>
+    </div>
+  </div>
+
+  <footer class="app">
+    MSA Align — browser port of the <code>msa-align-tool</code>. Built with a pure-JavaScript progressive aligner (BLOSUM62).<br/>
+    Alignment is heuristic and intended for quick analysis; for publication-grade alignment of large families use MUSCLE/MAFFT.
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ============================== BLOSUM62 ============================== */
+const BLOSUM62_RAW = `
+   A  R  N  D  C  Q  E  G  H  I  L  K  M  F  P  S  T  W  Y  V  B  Z  X  *
+A  4 -1 -2 -2  0 -1 -1  0 -2 -1 -1 -1 -1 -2 -1  1  0 -3 -2  0 -2 -1  0 -4
+R -1  5  0 -2 -3  1  0 -2  0 -3 -2  2 -1 -3 -2 -1 -1 -3 -2 -3 -1  0 -1 -4
+N -2  0  6  1 -3  0  0  0  1 -3 -3  0 -2 -3 -2  1  0 -4 -2 -3  3  0 -1 -4
+D -2 -2  1  6 -3  0  2 -1 -1 -3 -4 -1 -3 -3 -1  0 -1 -4 -3 -3  4  1 -1 -4
+C  0 -3 -3 -3  9 -3 -4 -3 -3 -1 -1 -3 -1 -2 -3 -1 -1 -2 -2 -1 -3 -3 -2 -4
+Q -1  1  0  0 -3  5  2 -2  0 -3 -2  1  0 -3 -1  0 -1 -2 -1 -2  0  3 -1 -4
+E -1  0  0  2 -4  2  5 -2  0 -3 -3  1 -2 -3 -1  0 -1 -3 -2 -2  1  4 -1 -4
+G  0 -2  0 -1 -3 -2 -2  6 -2 -4 -4 -2 -3 -3 -2  0 -2 -2 -3 -3 -1 -2 -1 -4
+H -2  0  1 -1 -3  0  0 -2  8 -3 -3 -1 -2 -1 -2 -1 -2 -2  2 -3  0  0 -1 -4
+I -1 -3 -3 -3 -1 -3 -3 -4 -3  4  2 -3  1  0 -3 -2 -1 -3 -1  3 -3 -3 -1 -4
+L -1 -2 -3 -4 -1 -2 -3 -4 -3  2  4 -2  2  0 -3 -2 -1 -2 -1  1 -4 -3 -1 -4
+K -1  2  0 -1 -3  1  1 -2 -1 -3 -2  5 -1 -3 -1  0 -1 -3 -2 -2  0  1 -1 -4
+M -1 -1 -2 -3 -1  0 -2 -3 -2  1  2 -1  5  0 -2 -1 -1 -1 -1  1 -3 -1 -1 -4
+F -2 -3 -3 -3 -2 -3 -3 -3 -1  0  0 -3  0  6 -4 -2 -2  1  3 -1 -3 -3 -1 -4
+P -1 -2 -2 -1 -3 -1 -1 -2 -2 -3 -3 -1 -2 -4  7 -1 -1 -4 -3 -2 -2 -1 -2 -4
+S  1 -1  1  0 -1  0  0  0 -1 -2 -2  0 -1 -2 -1  4  1 -3 -2 -2  0  0  0 -4
+T  0 -1  0 -1 -1 -1 -1 -2 -2 -1 -1 -1 -1 -2 -1  1  5 -2 -2  0 -1 -1  0 -4
+W -3 -3 -4 -4 -2 -2 -3 -2 -2 -3 -2 -3 -1  1 -4 -3 -2 11  2 -3 -4 -3 -2 -4
+Y -2 -2 -2 -3 -2 -1 -2 -3  2 -1 -1 -2 -1  3 -3 -2 -2  2  7 -1 -3 -2 -1 -4
+V  0 -3 -3 -3 -1 -2 -2 -3 -3  3  1 -2  1 -1 -2 -2  0 -3 -1  4 -3 -2 -1 -4
+B -2 -1  3  4 -3  0  1 -1  0 -3 -4  0 -3 -3 -2  0 -1 -4 -3 -3  4  1 -1 -4
+Z -1  0  0  1 -3  3  4 -2  0 -3 -3  1 -1 -3 -1  0 -1 -3 -2 -2  1  4 -1 -4
+X  0 -1 -1 -1 -2 -1 -1 -1 -1 -1 -1 -1 -1 -1 -2  0  0 -2 -1 -1 -1 -1 -1 -4
+* -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4 -4  1
+`;
+
+const BLOSUM = (function () {
+  const lines = BLOSUM62_RAW.trim().split("\n");
+  const header = lines[0].trim().split(/\s+/);
+  const mat = {};
+  for (let r = 1; r < lines.length; r++) {
+    const parts = lines[r].trim().split(/\s+/);
+    const aa = parts[0];
+    mat[aa] = {};
+    for (let c = 0; c < header.length; c++) mat[aa][header[c]] = parseInt(parts[c + 1], 10);
+  }
+  return mat;
+})();
+
+function sub(a, b) {
+  if (BLOSUM[a] && BLOSUM[a][b] !== undefined) return BLOSUM[a][b];
+  if (BLOSUM[a] && BLOSUM[a].X !== undefined) return BLOSUM[a].X;
+  return -1;
+}
+
+/* ============================== FASTA parsing ============================== */
+const VALID_AA = new Set("ACDEFGHIKLMNPQRSTVWYBJZX".split(""));
+
+function parseFasta(text) {
+  const seqs = [];
+  let cur = null;
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
+    if (line.startsWith(">")) {
+      if (cur) seqs.push(cur);
+      const header = line.slice(1).trim();
+      const id = header.split(/\s+/)[0] || "";
+      const desc = header.slice(id.length).trim();
+      cur = { id, description: desc, seq: "" };
+    } else if (line.trim()) {
+      if (!cur) cur = { id: "seq1", description: "", seq: "" };
+      cur.seq += line.trim();
+    }
+  }
+  if (cur) seqs.push(cur);
+
+  // Clean + validate + uniquify ids
+  const seen = new Map();
+  for (const s of seqs) {
+    s.seq = s.seq.toUpperCase().replace(/[\s\*\.\-]/g, "");
+    const bad = new Set();
+    for (const ch of s.seq) if (!VALID_AA.has(ch)) bad.add(ch);
+    if (bad.size) throw new Error(`Sequence "${s.id || "?"}" has invalid amino-acid characters: ${[...bad].sort().join(", ")}`);
+    if (!s.seq) throw new Error(`Sequence "${s.id || "?"}" is empty.`);
+    if (!s.id) s.id = "seq";
+    if (seen.has(s.id)) { const n = seen.get(s.id) + 1; seen.set(s.id, n); s.id = s.id + "_" + n; }
+    else seen.set(s.id, 1);
+  }
+  return seqs;
+}
+
+/* ============================== Profile alignment (Gotoh affine) ============================== */
+const NEG = -1e9;
+
+function alignProfiles(A, B, go, ge) {
+  const a = A.seqs, b = B.seqs;
+  const m = a[0].length, n = b[0].length;
+  const w = n + 1;
+  const size = (m + 1) * w;
+  const M = new Float64Array(size), Ix = new Float64Array(size), Iy = new Float64Array(size);
+  const tM = new Int8Array(size), tIx = new Int8Array(size), tIy = new Int8Array(size);
+
+  M[0] = 0; Ix[0] = NEG; Iy[0] = NEG;
+  for (let i = 1; i <= m; i++) {
+    const idx = i * w;
+    M[idx] = NEG; Iy[idx] = NEG;
+    Ix[idx] = go + (i - 1) * ge;
+    tIx[idx] = i === 1 ? 0 : 1;
+  }
+  for (let j = 1; j <= n; j++) {
+    M[j] = NEG; Ix[j] = NEG;
+    Iy[j] = go + (j - 1) * ge;
+    tIy[j] = j === 1 ? 0 : 2;
+  }
+
+  function colScore(i, j) {
+    let sum = 0, count = 0;
+    for (let x = 0; x < a.length; x++) {
+      const ca = a[x][i];
+      if (ca === "-") continue;
+      for (let y = 0; y < b.length; y++) {
+        const cb = b[y][j];
+        if (cb === "-") continue;
+        sum += sub(ca, cb); count++;
+      }
+    }
+    return count === 0 ? 0 : sum / count;
+  }
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const idx = i * w + j;
+      const d = (i - 1) * w + (j - 1);
+      const s = colScore(i - 1, j - 1);
+      let best = M[d], from = 0;
+      if (Ix[d] > best) { best = Ix[d]; from = 1; }
+      if (Iy[d] > best) { best = Iy[d]; from = 2; }
+      M[idx] = best + s; tM[idx] = from;
+
+      const u = (i - 1) * w + j;
+      const io = M[u] + go, ie = Ix[u] + ge;
+      if (io >= ie) { Ix[idx] = io; tIx[idx] = 0; } else { Ix[idx] = ie; tIx[idx] = 1; }
+
+      const l = i * w + (j - 1);
+      const jo = M[l] + go, je = Iy[l] + ge;
+      if (jo >= je) { Iy[idx] = jo; tIy[idx] = 0; } else { Iy[idx] = je; tIy[idx] = 2; }
+    }
+  }
+
+  let i = m, j = n, state = 0, best = M[m * w + n];
+  if (Ix[m * w + n] > best) { best = Ix[m * w + n]; state = 1; }
+  if (Iy[m * w + n] > best) { best = Iy[m * w + n]; state = 2; }
+
+  const outA = a.map(() => []);
+  const outB = b.map(() => []);
+  while (i > 0 || j > 0) {
+    if (state === 0) {
+      const from = tM[i * w + j];
+      for (let x = 0; x < a.length; x++) outA[x].push(a[x][i - 1]);
+      for (let y = 0; y < b.length; y++) outB[y].push(b[y][j - 1]);
+      i--; j--; state = from;
+    } else if (state === 1) {
+      const from = tIx[i * w + j];
+      for (let x = 0; x < a.length; x++) outA[x].push(a[x][i - 1]);
+      for (let y = 0; y < b.length; y++) outB[y].push("-");
+      i--; state = from === 0 ? 0 : 1;
+    } else {
+      const from = tIy[i * w + j];
+      for (let x = 0; x < a.length; x++) outA[x].push("-");
+      for (let y = 0; y < b.length; y++) outB[y].push(b[y][j - 1]);
+      j--; state = from === 0 ? 0 : 2;
+    }
+  }
+
+  const seqsA = outA.map((arr) => arr.reverse().join(""));
+  const seqsB = outB.map((arr) => arr.reverse().join(""));
+  return { names: A.names.concat(B.names), seqs: seqsA.concat(seqsB) };
+}
+
+/* ============================== Distance + UPGMA progressive ============================== */
+function pairwiseDistance(s1, s2, go, ge) {
+  const res = alignProfiles({ names: ["a"], seqs: [s1] }, { names: ["b"], seqs: [s2] }, go, ge);
+  const x = res.seqs[0], y = res.seqs[1];
+  let matches = 0, valid = 0;
+  for (let k = 0; k < x.length; k++) {
+    if (x[k] !== "-" && y[k] !== "-") { valid++; if (x[k] === y[k]) matches++; }
+  }
+  const identity = valid > 0 ? matches / valid : 0;
+  return 1 - identity;
+}
+
+function progressiveAlign(records, go, ge, onProgress) {
+  const N = records.length;
+  if (N === 1) return { names: [records[0].id], seqs: [records[0].seq] };
+
+  // distance matrix
+  const D = Array.from({ length: N }, () => new Float64Array(N));
+  const totalPairs = (N * (N - 1)) / 2;
+  let done = 0;
+  for (let i = 0; i < N; i++) {
+    for (let j = i + 1; j < N; j++) {
+      const dist = pairwiseDistance(records[i].seq, records[j].seq, go, ge);
+      D[i][j] = dist; D[j][i] = dist;
+      done++;
+    }
+    if (onProgress) onProgress((done / totalPairs) * 0.5, "Computing pairwise distances");
+  }
+
+  // UPGMA: clusters hold a profile, size, and member names
+  let clusters = records.map((r) => ({
+    profile: { names: [r.id], seqs: [r.seq] },
+    size: 1,
+  }));
+  // active distance matrix indexed by cluster array position
+  let dist = D.map((row) => Array.from(row));
+
+  const mergeSteps = N - 1;
+  let mergeCount = 0;
+  while (clusters.length > 1) {
+    // find min pair
+    let mi = 0, mj = 1, mv = Infinity;
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        if (dist[i][j] < mv) { mv = dist[i][j]; mi = i; mj = j; }
+      }
+    }
+    const ci = clusters[mi], cj = clusters[mj];
+    const merged = alignProfiles(ci.profile, cj.profile, go, ge);
+    const newCluster = { profile: merged, size: ci.size + cj.size };
+
+    // new distance row (UPGMA average weighted by size)
+    const newDist = [];
+    for (let k = 0; k < clusters.length; k++) {
+      if (k === mi || k === mj) continue;
+      const dk = (ci.size * dist[mi][k] + cj.size * dist[mj][k]) / (ci.size + cj.size);
+      newDist.push(dk);
+    }
+    // rebuild clusters and dist without mi, mj, then append newCluster
+    const keep = [];
+    for (let k = 0; k < clusters.length; k++) if (k !== mi && k !== mj) keep.push(k);
+    const nc = keep.map((k) => clusters[k]);
+    const nd = keep.map((k) => keep.map((k2) => dist[k][k2]));
+    // append new cluster
+    nc.push(newCluster);
+    for (let r = 0; r < nd.length; r++) nd[r].push(newDist[r]);
+    nd.push(newDist.concat([0]));
+    clusters = nc; dist = nd;
+
+    mergeCount++;
+    if (onProgress) onProgress(0.5 + (mergeCount / mergeSteps) * 0.5, "Building alignment");
+  }
+
+  const finalProfile = clusters[0].profile;
+  // reorder to input order
+  const map = new Map();
+  finalProfile.names.forEach((nm, idx) => map.set(nm, finalProfile.seqs[idx]));
+  return {
+    names: records.map((r) => r.id),
+    seqs: records.map((r) => map.get(r.id)),
+  };
+}
+
+/* ============================== Analysis ============================== */
+function isGap(c) { return c === "-" || c === "."; }
+
+function identityConservation(seqs) {
+  const L = seqs[0].length, out = new Array(L);
+  for (let c = 0; c < L; c++) {
+    const counts = {}; let total = 0;
+    for (const s of seqs) { const ch = s[c]; if (isGap(ch)) continue; counts[ch] = (counts[ch] || 0) + 1; total++; }
+    if (!total) { out[c] = 0; continue; }
+    let mx = 0; for (const k in counts) if (counts[k] > mx) mx = counts[k];
+    out[c] = mx / total;
+  }
+  return out;
+}
+
+function entropyConservation(seqs) {
+  const L = seqs[0].length, out = new Array(L);
+  for (let c = 0; c < L; c++) {
+    const counts = {}; let total = 0;
+    for (const s of seqs) { const ch = s[c]; if (isGap(ch)) continue; counts[ch] = (counts[ch] || 0) + 1; total++; }
+    if (!total) { out[c] = 0; continue; }
+    let entropy = 0; const types = Object.keys(counts).length;
+    for (const k in counts) { const p = counts[k] / total; entropy -= p * Math.log2(p); }
+    const maxE = Math.log2(Math.min(20, types));
+    out[c] = maxE > 0 ? Math.max(0, 1 - entropy / maxE) : 1;
+  }
+  return out;
+}
+
+function consensus(seqs, threshold = 0.5) {
+  const L = seqs[0].length; let s = "";
+  for (let c = 0; c < L; c++) {
+    const counts = {}; let total = 0;
+    for (const sq of seqs) { const ch = sq[c]; if (isGap(ch)) continue; counts[ch] = (counts[ch] || 0) + 1; total++; }
+    if (!total) { s += "-"; continue; }
+    let mc = null, mx = 0; for (const k in counts) if (counts[k] > mx) { mx = counts[k]; mc = k; }
+    s += (mx / total >= threshold) ? mc : "X";
+  }
+  return s;
+}
+
+const STRONG = ["RHK", "DE", "NQST", "AVLIM", "FWY"].map((g) => new Set(g));
+const WEAK = ["RHKDE", "NQSTC", "AVLIMFWY"].map((g) => new Set(g));
+
+function conservationSymbol(seqs, col) {
+  const chars = [];
+  for (const s of seqs) { const ch = s[col]; if (!isGap(ch)) chars.push(ch); }
+  if (!chars.length) return " ";
+  const uniq = new Set(chars);
+  if (uniq.size === 1) return "*";
+  const isSub = (groups) => groups.some((g) => [...uniq].every((c) => g.has(c)));
+  if (isSub(STRONG)) return ":";
+  if (isSub(WEAK)) return ".";
+  return " ";
+}
+
+function pairwiseIdentityMatrix(seqs) {
+  const n = seqs.length;
+  const mat = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    mat[i][i] = 1;
+    for (let j = i + 1; j < n; j++) {
+      const a = seqs[i], b = seqs[j];
+      let m = 0, v = 0;
+      for (let k = 0; k < a.length; k++) {
+        if (!isGap(a[k]) && !isGap(b[k])) { v++; if (a[k] === b[k]) m++; }
+      }
+      const id = v > 0 ? m / v : 0;
+      mat[i][j] = id; mat[j][i] = id;
+    }
+  }
+  return mat;
+}
+
+function gapStats(seqs) {
+  const L = seqs[0].length, N = seqs.length;
+  let totalGaps = 0, gapColumns = 0;
+  for (const s of seqs) for (const ch of s) if (isGap(ch)) totalGaps++;
+  for (let c = 0; c < L; c++) {
+    let g = 0; for (const s of seqs) if (isGap(s[c])) g++;
+    if (g === N) gapColumns++;
+  }
+  return { totalGaps, gapColumns, gapPercentage: (totalGaps / (L * N)) * 100 };
+}
+
+/* ============================== State + rendering ============================== */
+let STATE = null;
+
+function mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+
+const AA_COLORS = {
+  A: "#80a0f0", I: "#80a0f0", L: "#80a0f0", M: "#80a0f0", F: "#80a0f0", W: "#80a0f0", V: "#80a0f0",
+  K: "#f05050", R: "#f05050",
+  D: "#c050c0", E: "#c050c0",
+  N: "#30c030", Q: "#30c030", S: "#30c030", T: "#30c030",
+  C: "#f0a0a0",
+  G: "#f09048",
+  H: "#30b4b4", Y: "#30b4b4",
+  P: "#d0d020",
+};
+
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+function resColor(ch, conservation, scheme) {
+  if (isGap(ch)) return "";
+  if (scheme === "none") return "";
+  if (scheme === "conservation") {
+    const a = Math.max(0, Math.min(1, conservation));
+    return `background:rgba(79,156,249,${(a * 0.85).toFixed(2)});`;
+  }
+  const col = AA_COLORS[ch];
+  return col ? `background:${col};color:#10151b;` : "";
+}
+
+function buildAlignmentHTML(names, seqs, consArr, scheme) {
+  const L = seqs[0].length;
+  const consensusSeq = consensus(seqs);
+  let html = "";
+
+  // ruler
+  let ruler = '<div class="alnrow ruler"><span class="lbl"></span><span class="seq">';
+  for (let c = 0; c < L; c++) {
+    if ((c + 1) % 10 === 0) {
+      const label = String(c + 1);
+      // place number right-aligned ending at this column
+      ruler = ruler; // numbers handled below as tick marks
+    }
+  }
+  // simpler ruler: a tick char every 10
+  ruler = '<div class="alnrow ruler"><span class="lbl"></span><span class="seq">';
+  for (let c = 0; c < L; c++) {
+    const tick = (c + 1) % 10 === 0 ? "|" : ((c + 1) % 5 === 0 ? "·" : "&nbsp;");
+    ruler += `<span class="res">${tick}</span>`;
+  }
+  ruler += "</span></div>";
+  html += ruler;
+
+  for (let r = 0; r < seqs.length; r++) {
+    html += `<div class="alnrow"><span class="lbl" title="${esc(names[r])}">${esc(names[r])}</span><span class="seq">`;
+    const s = seqs[r];
+    for (let c = 0; c < L; c++) {
+      const ch = s[c];
+      const style = resColor(ch, consArr[c], scheme);
+      html += `<span class="res" style="${style}">${ch}</span>`;
+    }
+    html += "</span></div>";
+  }
+
+  // consensus row
+  html += `<div class="alnrow consrow"><span class="lbl">consensus</span><span class="seq">`;
+  for (let c = 0; c < L; c++) {
+    const ch = consensusSeq[c];
+    const style = resColor(ch, consArr[c], scheme === "none" ? "none" : "conservation");
+    html += `<span class="res" style="${style}">${ch}</span>`;
+  }
+  html += "</span></div>";
+
+  // symbol row
+  html += `<div class="alnrow symrow"><span class="lbl">conservation</span><span class="seq">`;
+  for (let c = 0; c < L; c++) html += `<span class="sym">${conservationSymbol(seqs, c)}</span>`;
+  html += "</span></div>";
+
+  return html;
+}
+
+function renderResults() {
+  const { names, seqs, records, time } = STATE;
+  const method = document.getElementById("consMethod").value;
+  const scheme = document.getElementById("colorScheme").value;
+  const consArr = method === "entropy" ? entropyConservation(seqs) : identityConservation(seqs);
+  STATE.consArr = consArr;
+
+  const L = seqs[0].length;
+  const idmat = pairwiseIdentityMatrix(seqs);
+  const pid = [];
+  for (let i = 0; i < seqs.length; i++) for (let j = i + 1; j < seqs.length; j++) pid.push(idmat[i][j]);
+  const gaps = gapStats(seqs);
+  const highCons = consArr.filter((v) => v >= 0.8).length;
+  STATE.idmat = idmat; STATE.gaps = gaps;
+
+  // stats
+  const stats = [
+    ["Sequences", seqs.length],
+    ["Alignment length", L],
+    ["Mean conservation", mean(consArr).toFixed(3)],
+    ["Highly conserved cols", highCons],
+    ["Mean pairwise identity", (mean(pid) * 100).toFixed(1) + "%"],
+    ["Gap %", gaps.gapPercentage.toFixed(1) + "%"],
+    ["Align time", time.toFixed(2) + "s"],
+  ];
+  document.getElementById("statsGrid").innerHTML = stats
+    .map(([k, v]) => `<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`)
+    .join("");
+
+  // alignment
+  document.getElementById("alnView").innerHTML = buildAlignmentHTML(names, seqs, consArr, scheme);
+
+  // legend
+  const legendEl = document.getElementById("legend");
+  if (scheme === "clustal") {
+    const groups = [
+      ["Hydrophobic (AILMFWV)", "#80a0f0"], ["Positive (KR)", "#f05050"], ["Negative (DE)", "#c050c0"],
+      ["Polar (NQST)", "#30c030"], ["Cysteine (C)", "#f0a0a0"], ["Glycine (G)", "#f09048"],
+      ["Aromatic (HY)", "#30b4b4"], ["Proline (P)", "#d0d020"],
+    ];
+    legendEl.innerHTML = groups.map(([t, c]) => `<span><b style="background:${c}"></b>${t}</span>`).join("") +
+      `<span style="margin-left:6px;">* identical &nbsp; : strongly similar &nbsp; . weakly similar</span>`;
+  } else if (scheme === "conservation") {
+    legendEl.innerHTML = `<span>Darker blue = more conserved column</span><span>* identical &nbsp; : strong &nbsp; . weak</span>`;
+  } else {
+    legendEl.innerHTML = `<span>* identical &nbsp; : strongly similar &nbsp; . weakly similar</span>`;
+  }
+
+  // identity matrix
+  let mh = '<table class="idmat"><tr><th></th>';
+  for (let j = 0; j < names.length; j++) mh += `<th title="${esc(names[j])}">${j + 1}</th>`;
+  mh += "</tr>";
+  for (let i = 0; i < names.length; i++) {
+    mh += `<tr><th title="${esc(names[i])}">${i + 1}. ${esc(names[i].slice(0, 14))}</th>`;
+    for (let j = 0; j < names.length; j++) {
+      const v = idmat[i][j];
+      const a = (v * 0.8).toFixed(2);
+      mh += `<td style="background:rgba(45,125,70,${a})">${(v * 100).toFixed(0)}</td>`;
+    }
+    mh += "</tr>";
+  }
+  mh += "</table>";
+  document.getElementById("matWrap").innerHTML = mh;
+
+  document.getElementById("results").classList.remove("hidden");
+}
+
+/* ============================== Export formats ============================== */
+function exportFasta(names, seqs) {
+  return seqs.map((s, i) => `>${names[i]}\n${s}`).join("\n") + "\n";
+}
+
+function exportClustal(names, seqs) {
+  let out = "CLUSTAL multiple sequence alignment (msa-align)\n\n";
+  const L = seqs[0].length, block = 60;
+  for (let start = 0; start < L; start += block) {
+    const end = Math.min(start + block, L);
+    for (let i = 0; i < seqs.length; i++) {
+      const id = names[i].slice(0, 15).padEnd(15);
+      out += `${id} ${seqs[i].slice(start, end)}\n`;
+    }
+    let sym = "";
+    for (let c = start; c < end; c++) sym += conservationSymbol(seqs, c);
+    out += " ".repeat(16) + sym + "\n\n";
+  }
+  return out;
+}
+
+function exportPhylip(names, seqs) {
+  let out = ` ${seqs.length} ${seqs[0].length}\n`;
+  for (let i = 0; i < seqs.length; i++) out += `${names[i].slice(0, 10).padEnd(10)} ${seqs[i]}\n`;
+  return out;
+}
+
+function exportJson() {
+  const { names, seqs, records, time } = STATE;
+  const consId = identityConservation(seqs);
+  const idmat = STATE.idmat || pairwiseIdentityMatrix(seqs);
+  const pid = [];
+  for (let i = 0; i < seqs.length; i++) for (let j = i + 1; j < seqs.length; j++) pid.push(idmat[i][j]);
+  const gaps = STATE.gaps || gapStats(seqs);
+  const data = {
+    tool: "msa-align (web)",
+    method: "progressive (Needleman-Wunsch + BLOSUM62, UPGMA guide tree)",
+    alignment_summary: {
+      sequence_count: seqs.length,
+      alignment_length: seqs[0].length,
+      alignment_time_seconds: Number(time.toFixed(3)),
+      mean_conservation: Number(mean(consId).toFixed(4)),
+      mean_pairwise_identity: Number(mean(pid).toFixed(4)),
+      gap_percentage: Number(gaps.gapPercentage.toFixed(2)),
+    },
+    conservation_scores: consId.map((v) => Number(v.toFixed(4))),
+    consensus_sequence: { sequence: consensus(seqs), id: "consensus", description: "Consensus (threshold=0.50)" },
+    pairwise_identity_matrix: idmat.map((r) => r.map((v) => Number(v.toFixed(4)))),
+    aligned_sequences: seqs.map((s, i) => ({
+      id: names[i],
+      description: records[i] ? records[i].description : "",
+      sequence: s,
+      length: s.length,
+      gaps: (s.match(/[-.]/g) || []).length,
+    })),
+  };
+  return JSON.stringify(data, null, 2);
+}
+
+function download(filename, content) {
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ============================== UI wiring ============================== */
+const EXAMPLE = `>seq1_human
+MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKASED
+>seq2_mouse
+MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKASED
+>seq3_rat
+MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKGFED
+>seq4_chicken
+MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKAHED
+>seq5_zebrafish
+MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKTFED
+>seq6_yeast
+MVLAEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKLHED
+>seq7_bacteria
+MVLTEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKPHED
+>seq8_archaea
+MVLSEGEWQLVLHVWAKVEADVAGHGQDILIRLFKSHPETLEKFDRFKHLKTEAEMKGNED`;
+
+function showMessage(text, kind) {
+  const el = document.getElementById("message");
+  if (!text) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="msg ${kind || ""}">${text}</div>`;
+}
+
+function runAlignment() {
+  showMessage("");
+  let records;
+  try {
+    records = parseFasta(document.getElementById("fasta").value);
+  } catch (e) {
+    showMessage(e.message, "err"); return;
+  }
+  if (records.length < 2) { showMessage("Please provide at least 2 sequences.", "err"); return; }
+  if (records.length > 200) { showMessage("Maximum 200 sequences supported in the browser.", "err"); return; }
+
+  const go = parseInt(document.getElementById("gapOpen").value, 10) || -10;
+  const ge = parseInt(document.getElementById("gapExtend").value, 10) || -1;
+
+  const maxLen = Math.max(...records.map((r) => r.seq.length));
+  let warn = "";
+  if (records.length > 60 || maxLen > 1200) {
+    warn = `Large input (${records.length} sequences, up to ${maxLen} residues) — this may take a few seconds.`;
+  }
+
+  const btn = document.getElementById("alignBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Aligning…';
+  showMessage((warn ? warn + " " : "") + "Working…", "warn");
+
+  setTimeout(() => {
+    try {
+      const t0 = performance.now();
+      const result = progressiveAlign(records, go, ge, null);
+      const time = (performance.now() - t0) / 1000;
+      STATE = { names: result.names, seqs: result.seqs, records, time };
+      renderResults();
+      showMessage("");
+    } catch (e) {
+      console.error(e);
+      showMessage("Alignment failed: " + e.message, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Align sequences";
+    }
+  }, 30);
+}
+
+document.getElementById("alignBtn").addEventListener("click", runAlignment);
+document.getElementById("exampleBtn").addEventListener("click", () => {
+  document.getElementById("fasta").value = EXAMPLE;
+});
+document.getElementById("clearBtn").addEventListener("click", () => {
+  document.getElementById("fasta").value = "";
+  document.getElementById("results").classList.add("hidden");
+  showMessage("");
+});
+document.getElementById("fileInput").addEventListener("change", (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => { document.getElementById("fasta").value = e.target.result; };
+  reader.readAsText(file);
+});
+document.getElementById("consMethod").addEventListener("change", () => { if (STATE) renderResults(); });
+document.getElementById("colorScheme").addEventListener("change", () => { if (STATE) renderResults(); });
+
+document.querySelectorAll("[data-fmt]").forEach((b) => {
+  b.addEventListener("click", () => {
+    if (!STATE) return;
+    const { names, seqs } = STATE;
+    const fmt = b.getAttribute("data-fmt");
+    if (fmt === "fasta") download("alignment.fasta", exportFasta(names, seqs));
+    else if (fmt === "clustal") download("alignment.aln", exportClustal(names, seqs));
+    else if (fmt === "phylip") download("alignment.phy", exportPhylip(names, seqs));
+    else if (fmt === "json") download("analysis.json", exportJson());
+  });
+});
+
+// Prefill example for first-time users
+document.getElementById("fasta").value = EXAMPLE;
+</script>
+</body>
+</html>
