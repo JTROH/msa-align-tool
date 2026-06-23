@@ -73,13 +73,15 @@
   h2.sec { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
   .aln-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
   .aln { font-family: var(--mono); font-size: 13px; white-space: nowrap; padding: 10px; min-width: max-content; }
-  .aln .alnrow { display: flex; align-items: center; }
-  .aln .lbl { display: inline-block; width: 150px; min-width: 150px; padding-right: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .aln .seq { letter-spacing: 0; }
-  .aln .res { display: inline-block; width: 11px; text-align: center; }
-  .aln .ruler { color: var(--muted); }
+  .aln .segment { margin-bottom: 18px; }
+  .aln .segment:last-child { margin-bottom: 0; }
+  .aln .arow { display: flex; align-items: center; height: 18px; }
+  .aln .lbl { width: 140px; min-width: 140px; padding-right: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .aln .block { white-space: nowrap; margin-right: 8px; }
+  .aln .res { display: inline-block; width: 12px; text-align: center; }
+  .aln .rblk { display: inline-block; margin-right: 8px; text-align: right; color: var(--muted); font-size: 11px; }
   .aln .consrow .lbl, .aln .symrow .lbl { font-weight: 600; color: var(--text); }
-  .aln .sym { display: inline-block; width: 11px; text-align: center; color: var(--accent); font-weight: 700; }
+  .aln .sym { display: inline-block; width: 12px; text-align: center; color: var(--accent); font-weight: 700; }
   .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 10px; }
   .legend span b { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
   table.idmat { border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
@@ -157,6 +159,7 @@
       <div class="aln-scroll"><div class="aln" id="alnView"></div></div>
       <div class="legend" id="legend"></div>
       <div class="btn-group" style="margin-top:14px;">
+        <button class="ghost" data-fmt="formatted">Download formatted (.txt)</button>
         <button class="ghost" data-fmt="fasta">Download FASTA</button>
         <button class="ghost" data-fmt="clustal">Download ClustalW</button>
         <button class="ghost" data-fmt="phylip">Download PHYLIP</button>
@@ -550,53 +553,62 @@ function resColor(ch, conservation, scheme) {
   return col ? `background:${col};color:#10151b;` : "";
 }
 
+const LINE_WIDTH = 100; // residues per wrapped line
+const BLOCK = 10;       // residues per block
+const CELL = 12;        // px per residue cell (matches .aln .res / .sym width)
+
+// Build one sequence/consensus/symbol row for columns [segStart, segEnd), grouped in blocks of 10.
+function rowHTML(label, getCell, segStart, segEnd, extraClass) {
+  let html = `<div class="arow ${extraClass || ""}"><span class="lbl" title="${esc(label)}">${esc(label)}</span>`;
+  for (let b = segStart; b < segEnd; b += BLOCK) {
+    const be = Math.min(b + BLOCK, segEnd);
+    html += '<span class="block">';
+    for (let c = b; c < be; c++) html += getCell(c);
+    html += "</span>";
+  }
+  html += "</div>";
+  return html;
+}
+
 function buildAlignmentHTML(names, seqs, consArr, scheme) {
   const L = seqs[0].length;
   const consensusSeq = consensus(seqs);
   let html = "";
 
-  // ruler
-  let ruler = '<div class="alnrow ruler"><span class="lbl"></span><span class="seq">';
-  for (let c = 0; c < L; c++) {
-    if ((c + 1) % 10 === 0) {
-      const label = String(c + 1);
-      // place number right-aligned ending at this column
-      ruler = ruler; // numbers handled below as tick marks
+  for (let segStart = 0; segStart < L; segStart += LINE_WIDTH) {
+    const segEnd = Math.min(segStart + LINE_WIDTH, L);
+    html += '<div class="segment">';
+
+    // numbered ruler: one right-aligned number per block (position of the block's last column)
+    let ruler = '<div class="arow ruler"><span class="lbl"></span>';
+    for (let b = segStart; b < segEnd; b += BLOCK) {
+      const be = Math.min(b + BLOCK, segEnd);
+      const count = be - b;
+      ruler += `<span class="rblk" style="width:${count * CELL}px">${be}</span>`;
     }
-  }
-  // simpler ruler: a tick char every 10
-  ruler = '<div class="alnrow ruler"><span class="lbl"></span><span class="seq">';
-  for (let c = 0; c < L; c++) {
-    const tick = (c + 1) % 10 === 0 ? "|" : ((c + 1) % 5 === 0 ? "·" : "&nbsp;");
-    ruler += `<span class="res">${tick}</span>`;
-  }
-  ruler += "</span></div>";
-  html += ruler;
+    ruler += "</div>";
+    html += ruler;
 
-  for (let r = 0; r < seqs.length; r++) {
-    html += `<div class="alnrow"><span class="lbl" title="${esc(names[r])}">${esc(names[r])}</span><span class="seq">`;
-    const s = seqs[r];
-    for (let c = 0; c < L; c++) {
-      const ch = s[c];
-      const style = resColor(ch, consArr[c], scheme);
-      html += `<span class="res" style="${style}">${ch}</span>`;
+    // sequences
+    for (let r = 0; r < seqs.length; r++) {
+      const s = seqs[r];
+      html += rowHTML(names[r], (c) => {
+        const ch = s[c];
+        return `<span class="res" style="${resColor(ch, consArr[c], scheme)}">${ch}</span>`;
+      }, segStart, segEnd);
     }
-    html += "</span></div>";
-  }
 
-  // consensus row
-  html += `<div class="alnrow consrow"><span class="lbl">consensus</span><span class="seq">`;
-  for (let c = 0; c < L; c++) {
-    const ch = consensusSeq[c];
-    const style = resColor(ch, consArr[c], scheme === "none" ? "none" : "conservation");
-    html += `<span class="res" style="${style}">${ch}</span>`;
-  }
-  html += "</span></div>";
+    // consensus
+    html += rowHTML("consensus", (c) => {
+      const ch = consensusSeq[c];
+      return `<span class="res" style="${resColor(ch, consArr[c], scheme === "none" ? "none" : "conservation")}">${ch}</span>`;
+    }, segStart, segEnd, "consrow");
 
-  // symbol row
-  html += `<div class="alnrow symrow"><span class="lbl">conservation</span><span class="seq">`;
-  for (let c = 0; c < L; c++) html += `<span class="sym">${conservationSymbol(seqs, c)}</span>`;
-  html += "</span></div>";
+    // conservation symbols
+    html += rowHTML("conservation", (c) => `<span class="sym">${conservationSymbol(seqs, c)}</span>`, segStart, segEnd, "symrow");
+
+    html += "</div>";
+  }
 
   return html;
 }
@@ -692,6 +704,40 @@ function exportClustal(names, seqs) {
 function exportPhylip(names, seqs) {
   let out = ` ${seqs.length} ${seqs[0].length}\n`;
   for (let i = 0; i < seqs.length; i++) out += `${names[i].slice(0, 10).padEnd(10)} ${seqs[i]}\n`;
+  return out;
+}
+
+// Human-readable wrapped alignment: 100 columns per line, blocks of 10, numbered ruler.
+function exportFormatted(names, seqs) {
+  const L = seqs[0].length;
+  const consensusSeq = consensus(seqs);
+  const NAME_W = 16;
+  const blocksOf = (str, start, end) => {
+    const parts = [];
+    for (let b = start; b < end; b += BLOCK) parts.push(str.slice(b, Math.min(b + BLOCK, end)));
+    return parts.join(" ");
+  };
+  let out = "MSA Align - formatted alignment\n" +
+            `${seqs.length} sequences, ${L} columns. ${LINE_WIDTH} columns per line, blocks of ${BLOCK}.\n\n`;
+  for (let segStart = 0; segStart < L; segStart += LINE_WIDTH) {
+    const segEnd = Math.min(segStart + LINE_WIDTH, L);
+    // ruler: number right-aligned over each block (position of block's last column)
+    let ruler = " ".repeat(NAME_W + 1);
+    const rparts = [];
+    for (let b = segStart; b < segEnd; b += BLOCK) {
+      const be = Math.min(b + BLOCK, segEnd);
+      rparts.push(String(be).padStart(be - b));
+    }
+    out += ruler + rparts.join(" ") + "\n";
+    for (let i = 0; i < seqs.length; i++) {
+      const nm = (names[i].length > NAME_W ? names[i].slice(0, NAME_W) : names[i]).padEnd(NAME_W);
+      out += nm + " " + blocksOf(seqs[i], segStart, segEnd) + "\n";
+    }
+    out += "consensus".padEnd(NAME_W) + " " + blocksOf(consensusSeq, segStart, segEnd) + "\n";
+    let sym = "";
+    for (let c = segStart; c < segEnd; c++) sym += conservationSymbol(seqs, c);
+    out += " ".repeat(NAME_W) + " " + blocksOf(sym, 0, sym.length) + "\n\n";
+  }
   return out;
 }
 
@@ -828,7 +874,8 @@ document.querySelectorAll("[data-fmt]").forEach((b) => {
     if (!STATE) return;
     const { names, seqs } = STATE;
     const fmt = b.getAttribute("data-fmt");
-    if (fmt === "fasta") download("alignment.fasta", exportFasta(names, seqs));
+    if (fmt === "formatted") download("alignment.txt", exportFormatted(names, seqs));
+    else if (fmt === "fasta") download("alignment.fasta", exportFasta(names, seqs));
     else if (fmt === "clustal") download("alignment.aln", exportClustal(names, seqs));
     else if (fmt === "phylip") download("alignment.phy", exportPhylip(names, seqs));
     else if (fmt === "json") download("analysis.json", exportJson());

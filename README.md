@@ -8,9 +8,9 @@ This is the portable web port of the Python `msa-align-tool`. Because the origin
 
 - **Pure-JavaScript progressive aligner** — pairwise Needleman–Wunsch with **BLOSUM62** and affine gaps → pairwise-distance matrix → **UPGMA guide tree** → progressive profile–profile alignment (a mini-Clustal).
 - **Paste or upload** FASTA, or load the bundled example.
-- **Colored alignment viewer** — Clustal-style coloring by amino-acid property, a *color-by-conservation* mode, consensus row, and a Clustal conservation track (`*` identical, `:` strong, `.` weak).
+- **Colored alignment viewer** — wrapped at **100 columns per line in blocks of 10 with a numbered ruler** (10, 20, 30, …); Clustal-style coloring by amino-acid property, a *color-by-conservation* mode, consensus row, and a Clustal conservation track (`*` identical, `:` strong, `.` weak).
 - **Analysis** mirroring the original tool: per-column conservation (identity **or** Shannon entropy), consensus sequence, pairwise-identity matrix, gap statistics.
-- **Exports**: aligned **FASTA**, **ClustalW** (`.aln`), **PHYLIP** (`.phy`), and a **JSON** analysis report.
+- **Exports**: a **human-readable formatted alignment** (`.txt`, 100/line, blocks of 10, numbered), aligned **FASTA**, **ClustalW** (`.aln`), **PHYLIP** (`.phy`), and a **JSON** analysis report.
 - **Works offline** — everything (including the BLOSUM62 matrix) is embedded in one HTML file.
 
 ## 🚀 Use it
@@ -34,6 +34,7 @@ This is the portable web port of the Python `msa-align-tool`. Because the origin
 
 | Format | Extension | Notes |
 |--------|-----------|-------|
+| Formatted | `.txt` | Human-readable: 100 columns/line, blocks of 10, numbered ruler, consensus + conservation rows |
 | FASTA | `.fasta` | Aligned sequences with gaps |
 | ClustalW | `.aln` | 60-col blocks with conservation symbols |
 | PHYLIP | `.phy` | Sequential, 10-char names |
