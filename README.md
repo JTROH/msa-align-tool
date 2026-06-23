@@ -1,5 +1,9 @@
 # MSA Align — Web Edition 🧬
 
+[![MSA Align — in-browser amino-acid multiple sequence alignment](og-image.png)](https://jtroh.github.io/msa-align-tool/)
+
+### ▶︎ [Open the live tool: jtroh.github.io/msa-align-tool](https://jtroh.github.io/msa-align-tool/)
+
 A **single-file, in-browser multiple sequence alignment tool** for amino-acid sequences. No install, no server, no internet required — open `index.html` on any device (phone, tablet, laptop) and it just works.
 
 This is the portable web port of the Python `msa-align-tool`. Because the original relies on the external **MUSCLE** binary (plus BioPython/NumPy and Python 3.11), it can't run on phones or in a browser. This version reimplements the alignment engine in pure JavaScript and reproduces the original's analysis layer and output formats.
