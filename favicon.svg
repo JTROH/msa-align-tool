@@ -1,4 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" rx="14" fill="#131b24"/>
-  <text x="32" y="34" font-size="42" text-anchor="middle" dominant-baseline="central">🧬</text>
+  <g transform="rotate(40 32 32)" fill="none" stroke-linecap="round">
+    <!-- rungs -->
+    <g stroke="#c050c0" stroke-width="3">
+      <line x1="24" y1="15" x2="40" y2="15"/>
+      <line x1="24" y1="27" x2="40" y2="27"/>
+      <line x1="24" y1="37" x2="40" y2="37"/>
+      <line x1="24" y1="49" x2="40" y2="49"/>
+    </g>
+    <!-- strand 1 -->
+    <path d="M40 15 C40 21 24 21 24 27 C24 33 40 33 40 37 C40 43 24 43 24 49"
+          stroke="#4f9cf9" stroke-width="5"/>
+    <!-- strand 2 -->
+    <path d="M24 15 C24 21 40 21 40 27 C40 33 24 33 24 37 C24 43 40 43 40 49"
+          stroke="#36c6c0" stroke-width="5"/>
+  </g>
 </svg>
